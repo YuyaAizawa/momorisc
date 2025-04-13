@@ -1,0 +1,10 @@
+; Read 2 numbers from input
+; and output the sum
+LDI D 90
+LD A D
+LD B D
+ADD C A B
+ST C D
+HLT
+----
+42 57

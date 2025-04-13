@@ -7,6 +7,7 @@ import Html exposing (Html)
 import Html.Attributes as Attr
 import Html.Events exposing (onClick)
 import Html.Events.Extra exposing (onChange)
+import Http
 import Task
 import Time
 
@@ -21,7 +22,7 @@ import MomoRisc.Program as Program exposing (Program, DebugInfo, Errors, LineNum
 
 main =
   Browser.element
-    { init = (\() -> ( init, Cmd.none ))
+    { init = init
     , view = view
     , update = update
     , subscriptions = subscriptions
@@ -52,51 +53,34 @@ type alias Model =
 type Tab
   = EditorTab
   | RunnerTab
+  | SamplesTab
 
 
-init : Model
-init =
+init : () -> ( Model, Cmd Msg )
+init _ =
   let
     ( program, debug, errors ) =
-      Program.compile sampleCode
+      Program.compile ""
+
+    model =
+      { cpu = Cpu.init
+      , program = program
+      , memory = Memory.zeros
+      , chario = Device.charioInit
+      , source = ""
+      , defaultInput = ""
+      , errors = errors
+      , debug = debug
+      , lastCycle = Cpu.init
+      , wroteAddr = Nothing
+      , tab = RunnerTab
+      , speed = Stop
+      }
+
+    loadCmd =
+      Task.perform (\_ -> LoadSample "reverse_string") (Task.succeed ())
   in
-    { cpu = Cpu.init
-    , program = program
-    , memory = Memory.zeros
-    , chario = Device.charioInit |> Device.setInput sampleInput
-    , source = sampleCode
-    , defaultInput = sampleInput
-    , errors = errors
-    , debug = debug
-    , lastCycle = Cpu.init
-    , wroteAddr = Nothing
-    , tab = RunnerTab
-    , speed = Stop
-    }
-
-
-sampleCode : String
-sampleCode =
-  """; Read the input and output it
-; in reverse order.
-LDI B 91
-LDI C 01
-LD A B
-BEQ A D 07
-ST A C
-ADI C C 01
-JPI A 02
-ADI C C 99
-LD A C
-BEQ A D 12
-ST A B
-JPI A 07
-HLT
-"""
-
-
-sampleInput : String
-sampleInput = "CSIRomoM"
+    ( model, loadCmd )
 
 
 
@@ -114,6 +98,8 @@ type Msg
   | SpeedChange Speed
   | CharioInputEdited String
   | CharioOutputClear
+  | LoadSample String
+  | SampleLoaded String
 
 
 type Speed
@@ -143,16 +129,13 @@ update msg model =
         , tab = tab
         } |> noCmd
 
-
     SourceEdited str ->
       { model | source = str }
         |> noCmd
 
-
     DefaultInputEdited str ->
       { model | defaultInput = str }
         |> noCmd
-
 
     Compile ->
       let
@@ -168,7 +151,6 @@ update msg model =
       in
         ( model_, continueMsgs [ ResetMachine, TabChange RunnerTab ] )
 
-
     ResetMachine ->
       { model
       | cpu = Cpu.init
@@ -178,7 +160,6 @@ update msg model =
       , chario = Device.charioInit |> Device.setInput model.defaultInput
       , speed = Stop
       } |> noCmd
-
 
     Step ->
       let
@@ -242,6 +223,39 @@ update msg model =
       { model | chario = Device.clearOutput model.chario }
         |> noCmd
 
+    LoadSample name ->
+      let
+        cmd =
+          Http.get
+            { url = "./sample/" ++ name ++ ".txt"
+            , expect = Http.expectString (Result.withDefault "" >> SampleLoaded)
+            }
+      in
+        ( model, cmd )
+
+    SampleLoaded sample ->
+      let
+        ( source, defaultInput ) =
+          case sample |> String.split "----\n" of
+            first :: second :: _ ->
+              ( first
+              , if second |> String.endsWith "\n" then
+                  second |> String.dropRight 1
+                else
+                  second
+              )
+
+            _ ->
+              ( sample, "" )
+
+        model_ =
+          { model
+          | source = source
+          , defaultInput = defaultInput
+          }
+      in
+        ( model_, continueMsgs [ Compile ] )
+
 
 noCmd : Model -> ( Model, Cmd msg )
 noCmd model =
@@ -252,6 +266,7 @@ continueMsgs : List Msg -> Cmd Msg
 continueMsgs =
   List.map (\msg -> Task.perform (\_ -> msg) (Task.succeed ()))
     >> Cmd.batch
+
 
 
 ----------
@@ -283,11 +298,18 @@ tabBuildInfo tab =
       , contents = runnerContents
       }
 
+    SamplesTab ->
+      { title = "Samples"
+      , labelId = "samples-tab"
+      , panelId = "samples-panel"
+      , contents = samplesContents
+      }
+
 
 view : Model -> Html Msg
 view model =
   let
-    tabs = [ EditorTab, RunnerTab ]
+    tabs = [ EditorTab, RunnerTab, SamplesTab ]
 
     ( labels, panels ) =
       tabs
@@ -377,7 +399,7 @@ runnerContents model =
   [ Html.div [ Attr.class "two-column-wrapper" ]
       [ Html.div [ Attr.class "left-column" ]
         [ Html.h3 [] [ Html.text "Program" ]
-        , checkAndRunArea model.source model.debug model.errors model.cpu
+        , compilationResultArea model.source model.debug model.errors model.cpu
         ]
       , Html.div [ Attr.class "right-column" ]
         [ Html.h3 [] [ Html.text "Register" ]
@@ -407,10 +429,54 @@ runnerContents model =
 
 
 
--- CHECK AND RUN AREA --
+-- SAMPLE CONTENTS --
 
-checkAndRunArea : String -> Dict LineNum Dudit -> Dict LineNum ParseErr -> Cpu -> Html Msg
-checkAndRunArea source debug errors cpu =
+type alias Sample =
+  { title: String
+  , file: String
+  , description: String
+  }
+
+
+samples =
+  [ { title = "Hello World"
+    , file = "hello_world"
+    , description = "\"Hello World\" と出力します"
+    }
+  , { title = "足し算"
+    , file = "add_numbers"
+    , description = "入力された2組の2桁までの数字を足します"
+    }
+  , { title = "逆転"
+    , file = "reverse_string"
+    , description = "入力された文字列を逆順に出力します"
+    }
+  ]
+
+
+samplesContents : a -> List (Html Msg)
+samplesContents _ =
+  let
+    listItems =
+      samples
+        |> List.map
+          (\{ title, file, description } ->
+            Html.li []
+              [ Html.button [ onClick <| LoadSample file ] [ Html.text title ]
+              , Html.text <| ": " ++ description
+              ]
+          )
+  in
+    [ Html.h3 [] [ Html.text "Samples" ]
+    , Html.ul [] listItems
+    ]
+
+
+
+-- COMPILEAION RESULT AREA --
+
+compilationResultArea : String -> Dict LineNum Dudit -> Dict LineNum ParseErr -> Cpu -> Html Msg
+compilationResultArea source debug errors cpu =
   let
     addrAndCodeView : LineNum -> String -> ( Html msg, Html msg )
     addrAndCodeView lineNum str =

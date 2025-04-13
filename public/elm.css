@@ -277,6 +277,14 @@ table.memory {
   line-height: 1.2;
 }
 
+#samples-panel button {
+  all: unset;
+  color: blue;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+
 footer {
   margin-top: 2rem;
   padding: 1rem 0.5rem;
