@@ -89,9 +89,6 @@ readNumber (Chario impl) =
             ( Just lnum, Just rnum ) ->
               ( lnum * 10 + rnum, rest )
 
-            ( Just lnum, Nothing ) ->
-              ( lnum, rest )
-
             _ ->
               ( 0, rest )))
   in
