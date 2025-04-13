@@ -80,20 +80,20 @@ LDI B 91
 LDI C 01
 LD A B
 BEQ A D 07
-ST C A
+ST A C
 ADI C C 01
 JPI A 02
 ADI C C 99
 LD A C
 BEQ A D 12
-ST B A
+ST A B
 JPI A 07
 HLT
 """
 
 
 sampleInput : String
-sampleInput = "KSIRomoM"
+sampleInput = "CSIRomoM"
 
 
 

@@ -59,10 +59,10 @@ step prog cpu =
       in
         ReadNeeded addr cpu_
 
-    ST rd rs ->
+    ST rs2 rs1 ->
       let
-        data = read rs cpu
-        addr = read rd cpu
+        addr = read rs1 cpu
+        data = read rs2 cpu
         cpu_ = incPc cpu
       in
         WriteNeeded addr data cpu_
