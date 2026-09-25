@@ -1,0 +1,81 @@
+; 40 x 20 quadratic pattern
+;
+; A = x (0..39)
+; B = y (0..19)
+; C = temporary / character
+; D = temporary / output address
+;
+; q = (x - 20)^2 + 2*(x - 20)*y + 3*y  (mod 100)
+;
+; q near 0 (or 100) is drawn brightly.
+
+LDI B 00        ; 00: y = 0
+
+LDI A 00        ; 01: x = 0
+
+ADI C A 80      ; 02: C = x - 20  (mod 100)
+MUL D C C       ; 03: D = u*u
+MUL C C B       ; 04: C = u*y
+ADD D D C       ; 05: D += u*y
+ADD D D C       ; 06: D += u*y
+ADD D D B       ; 07: D += y
+ADD D D B       ; 08: D += y
+ADD D D B       ; 09: D += y
+
+; Convert q into a character.
+; 00..03, 96..99 : @
+; 04..09, 90..95 : *
+; 10..15, 84..89 : .
+; 16..83         : space
+
+LDI C 04        ; 10
+BLT D C 22      ; 11
+
+LDI C 10        ; 12
+BLT D C 24      ; 13
+
+LDI C 16        ; 14
+BLT D C 26      ; 15
+
+LDI C 84        ; 16
+BLT D C 28      ; 17
+
+LDI C 90        ; 18
+BLT D C 26      ; 19
+
+LDI C 96        ; 20
+BLT D C 24      ; 21
+
+; '@'
+LDI C 89        ; 22
+JPI D 30        ; 23
+
+; '*'
+LDI C 93        ; 24
+JPI D 30        ; 25
+
+; '.'
+LDI C 03        ; 26
+JPI D 30        ; 27
+
+; ' '
+LDI C 01        ; 28
+JPI D 30        ; 29
+
+; emit character
+LDI D 91        ; 30
+ST C D          ; 31
+
+ADI A A 01      ; 32: x++
+LDI C 40        ; 33
+BLT A C 02      ; 34: next pixel
+
+; newline
+LDI C 99        ; 35
+ST C D          ; 36
+
+ADI B B 01      ; 37: y++
+LDI C 20        ; 38
+BLT B C 01      ; 39: next row
+
+HLT             ; 40

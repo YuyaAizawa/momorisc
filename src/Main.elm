@@ -451,6 +451,10 @@ samples =
     , file = "reverse_string"
     , description = "入力された文字列を逆順に出力します"
     }
+  , { title = "百進紋様"
+    , file = "centaple_pattern"
+    , description = "曲線が折り畳まれて幾何学模様に崩れていく ChatGPT / GPT-5.6 Sol作"
+    }
   ]
 
 
